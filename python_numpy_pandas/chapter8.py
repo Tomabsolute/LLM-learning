@@ -94,13 +94,15 @@ if __name__ == "__main__":
     idx = np.argmin(CV_MSE)
     best_alpha = alphas[idx]
     tree = build_tree(X_train,Y_train,max_depth,min_samples_split,min_samples_leaf)
-    pruned_tree = prune_tree(tree,alpha)
+    pruned_tree = prune_tree(tree,best_alpha)
     y_train_pred = tree_predict(X_train,pruned_tree)
     y_test_pred = tree_predict(X_test,pruned_tree)
     test_mse = np.mean((Y_test-y_test_pred)**2)
-    number_leaves = count_leaves(tree)
-    ALL_Train_MSE.append(y_train_pred)
-    ALL_Test_MSE.append(y_test_pred)
+    number_leaves = count_leaves(pruned_tree)
+    train_mse = np.mean((Y_train-y_train_pred)**2)
+
+    ALL_Train_MSE.append(train_mse)
+    ALL_Test_MSE.append(test_mse)
 
     plt.figure()
     positions = np.arange(len(alphas))
@@ -142,18 +144,35 @@ if __name__ == "__main__":
     M_values = [20, 50, 100, 200]
     CV_MSE = []
     elements = list(product(learning_rates,M_values))
-    for learning_rate,M in elements:
-        MSE = []
+    CV_MSE = []
+
+    for learning_rate in learning_rates:
+        models = []
+
         for i in range(5):
             X_train_1 = np.concatenate(X_1[:i]+X_1[i+1:])
-            X_val = X_1[i]
             Y_train_1 = np.concatenate(Y_1[:i]+Y_1[i+1:])
-            Y_val = Y_1[i]
-            model = boosting_fit(X_train_1,Y_train_1,200,learning_rate,2)
-            y_pred = boosting_predict(X_val,model,M)
-            mse = np.mean((Y_val-y_pred)**2)
-            MSE.append(mse)
-        CV_MSE.append(np.mean(MSE))
+
+            model = boosting_fit(
+                X_train_1,
+                Y_train_1,
+                200,
+                learning_rate,
+                2
+            )
+            models.append(model)
+
+        for M in M_values:
+            MSE = []
+
+            for i in range(5):
+                y_pred = boosting_predict(
+                    X_1[i], models[i], M
+                )
+                mse = np.mean((Y_1[i]-y_pred)**2)
+                MSE.append(mse)
+
+            CV_MSE.append(np.mean(MSE))
     idx = np.argmin(CV_MSE)
     best_learning_rate,best_M = elements[idx]
     model = boosting_fit(X_train,Y_train,200,best_learning_rate,2)
@@ -167,14 +186,17 @@ if __name__ == "__main__":
     print(f"best_M is {best_M}")
     print(f"test mse is {test_mse}")
 
-    fig,ax = plt.subplots(1,len(learning_rates))
+    fig,ax = plt.subplots(
+        1, len(learning_rates),
+        figsize=(5 * len(learning_rates), 4),
+        layout="constrained"
+    )
     for i in range(len(learning_rates)):
         length = len(M_values)*i
-        ax[i].plot(M_values,CV_MSE[length:length+len(M)],label = f"learning_rate = {learning_rates[i]}")
+        ax[i].plot(M_values,CV_MSE[length:length+len(M_values)],label = f"learning_rate = {learning_rates[i]}")
         ax[i].set_xlabel("M")
         ax[i].set_ylabel("CV MSE")
-        ax[i].legend()
-    fig.tight_layout()
+        ax[i].legend(fontsize=9)
     plt.show()
 
     # Part D：模型综合比较
@@ -183,6 +205,7 @@ if __name__ == "__main__":
     df = pd.DataFrame({"model":Models,"Train MSE":ALL_Train_MSE,"Test MSE":ALL_Test_MSE})
     print(df)
 
-    plt.figure()
-    plt.bar(Models,Train_MSE)
+    plt.figure(figsize=(10, 5), layout="constrained")
+    plt.bar(Models,ALL_Test_MSE)
+    plt.xticks(rotation=25, ha="right")
     plt.show()
